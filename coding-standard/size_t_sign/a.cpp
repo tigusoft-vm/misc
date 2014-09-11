@@ -4,6 +4,8 @@
 #include <sstream>
 #include <stdexcept>
 #include <limits>
+#include <cmath>
+#include <iomanip>
 
 
 
@@ -46,7 +48,7 @@ struct xsize_t_struct {
 		xsize_t_struct() { }
 		xsize_t_struct(size_t t) { m_minus=0; m_value=t; }
 
-		void my_abort(const char *msg) {
+		void my_abort(const std::string & msg) {
 			std::cout << "size_t arithmetics error in " << __FUNCTION__ << " " << __FILE__<<" : " << msg << std::endl;
 			abort();
 		}
@@ -54,28 +56,37 @@ struct xsize_t_struct {
 		// TODO also for signed long int
 		xsize_t_struct(signed long long int v) { 
 			if (v<0) { 
+				// we are not guaranteeing to store other values then needed for comparsing, so no need to check if -v is stored correctly
 				m_minus = 1; 
-				// if (v < limit_lowest) my_abort("Underflow: value is too small (negative) to be placed in signed-size_t."); // not needed since 
-				// we are not guaranteeing to store other values then needed for comparsing, so no need for this check
-				m_value = -v;
+				m_value = 1; // -v  we just store it as representing "-1". we avoid "-v" in case if that could wrap around,
+				// and result in minus=1,value=0 which would represent "-0" and that is not allowed (because other code 
+				// is not prepared to handle that correctly when comparing "-0" <= 0.
 			}
 			else {
-				const size_t limit_max = std::numeric_limits<size_t>::max(); 
 				m_minus = 0; 
-				if (v > (long long int)limit_max) my_abort("Overflow: value is too big to be placed in signed-size_t, "
-					"you are probably doing something wrong if you were about to compare it to size_t then.");
+				const size_t limit_max = std::numeric_limits<size_t>::max(); 
+				unsigned long long int vu = v;
+				if (vu > limit_max) {
+					my_abort(std::string("Overflow: value of v=") + std::to_string(v) + std::string(" is too big to be placed in signed-size_t, "
+						"you are probably doing something wrong if you were about to compare it to size_t then"));
+				}
 				m_value = v;
 			}
 		}
 
-		#define ATTR
+		#define ATTR // TODO attribute operator?
 
 		ATTR bool operator<=(size_t b) const { if (m_minus) return 1; return m_value <= b; }
 		ATTR bool operator<(size_t b) const { if (m_minus) return 1; return m_value < b; }
 		ATTR bool operator>=(size_t b) const { if (m_minus) return 0; return m_value >= b; }
 		ATTR bool operator>(size_t b) const { if (m_minus) return 0; return m_value > b; }
+		ATTR bool operator==(size_t b) const { if (m_minus) return 0; return m_value == b; }
+		ATTR bool operator!=(size_t b) const { if (m_minus) return 1; return m_value != b; }
 
-		ATTR operator size_t() { if (m_minus) my_abort("Trying to convert negative value to size_t!"); return m_value; }
+		ATTR operator size_t() { 
+			if (m_minus) my_abort( std::string("Trying to convert negative value=")+std::to_string(m_value)+std::string(" back to size_t!"));
+			return m_value; 
+		}
 
 		#undef ATTR
 
@@ -167,6 +178,45 @@ void main2() {
 
 void FOO() { }
 
+template <class T> 
+class fake_vector {
+	public:
+		size_t m_size;
+		fake_vector() : m_size(0) { }
+		void resize(size_t new_size) { m_size = new_size; }
+		size_t size() const { return m_size; }
+};
+
+template <class T_VECTOR>
+bool test_vector_size(long long int AI, size_t BV) {
+	using namespace std; 
+	std::cout << setw(20) << AI << " vs vector size BV="<< setw(20) << BV <<"... " << std::flush;
+	T_VECTOR tab;
+	tab.resize(BV);
+
+	bool all_ok=1;
+
+	#define COMPARE(OPERATOR, OPERATOR_NAME) \
+	do { \
+		bool c1 = ((xsize_t_struct) AI  OPERATOR  tab.size()); \
+		bool c2 = (long double) AI  OPERATOR  (long double) BV; \
+		bool OK = (c1==c2); \
+		if (OK) cout << "ok" << OPERATOR_NAME << " "; else { cout <<"FAILED AI="<<AI<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "BV="<<BV<<" c1="<<c1<<" c2="<<c2<<"! "; } \
+		all_ok = all_ok && OK; \
+	} while(0)
+
+	COMPARE( < , "<" );
+	COMPARE( <= , "<=" );
+	COMPARE( > , ">" );
+	COMPARE( > , ">=" );
+	COMPARE( == , "==" );
+	COMPARE( != , "!=" );
+	cout << "." << endl;
+
+	if (!all_ok) abort();
+	return all_ok;
+}
+
 // TODO test case!
 void main3() {
 	int long long x = -3;
@@ -176,6 +226,57 @@ void main3() {
 	if ( (xsize_t_struct) x <= tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x > tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x >= tab.size()) { FOO(); } 
+
+	typedef signed long long int integral;
+
+	integral p31 = std::pow(2,31);
+	integral p32 = std::pow(2,32);
+	size_t min1 = std::numeric_limits<size_t>::min();
+	size_t max1 = std::numeric_limits<size_t>::max();
+	size_t min2 = std::numeric_limits<integral>::min();
+	size_t max2 = std::numeric_limits<integral>::max();
+
+	vector<integral> i_values = { 
+		min2,min2+1,min2+2,min1,min1+1, 
+		-p32-1, -p32, -p32+1, -p31-1, -p31, -p31+1, 
+		-2,-1,
+		0,+1,+2,+3, +100,
+		+p31-1,+p31,+p31+1, +p32-1,+p32,+p32+1, 
+		max1/2-1, max1/2, max2/2-1, max2/2, /* max2+... would go out */
+		max1-1, max1, max2-1, max2, /* max2+... would go out */
+		};
+
+	vector<size_t> v_values = { 
+		0,+1,+2,+3, +100,
+		+p31-1,+p31,+p31+1, +p32-1,+p32,+p32+1, 
+		max1/2-1, max1/2, max2/2-1, max2/2, max2/2+1, max2/2+2, 
+		max1-1, max1, max2-1, max2, max2+1, max2+2 
+		};
+
+
+	for (auto i : i_values) std::cout<<i<<" "; std::cout << std::endl;
+	for (auto v : v_values) std::cout<<v<<" "; std::cout << std::endl;
+	
+	bool all_ok = 1;
+	for (auto i : i_values) { 
+		for (auto v : v_values) {
+			const bool v_huge = v > std::pow(2,16);
+			if (!v_huge) {
+				// cout << "v_huge="<<v_huge<<" real vector for v="<<v << endl;
+				const bool ok = test_vector_size< vector<char> >(i,v);
+				all_ok = all_ok && ok;
+			} else {
+				// cout << "v_huge="<<v_huge<<" FAKE vector for v="<<v << endl;
+				const bool ok = test_vector_size< fake_vector<char> >(i,v);
+				all_ok = all_ok && ok;
+			}
+		}	
+	}
+
+	if (!all_ok) {
+		cout << "!!! SOME TESTS FAILED !!!" << endl;
+	} else cout << "All good :)" << endl;
+
 }
 
 int main() {
