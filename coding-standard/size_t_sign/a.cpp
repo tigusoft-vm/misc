@@ -8,8 +8,6 @@
 #include <iomanip>
 
 
-
-
 /***
 
 signed long a; size_t b;
@@ -39,6 +37,8 @@ Use this ONLY for casting for ONLY comparsions.
 This type is allowed to give you garbaged value in other cases, e.g. if you would like to store large negative
 number here, then it only guarantees to be able to confirm that will be smaller then your size_t (e.g. we could store here value like -1)
 */
+
+#define ATTR // TODO attribute operator?
 struct xsize_t_struct { 
 	private:
 		size_t m_value; // the value (without size) minus zero is not allowed.
@@ -74,24 +74,41 @@ struct xsize_t_struct {
 			}
 		}
 
-		#define ATTR // TODO attribute operator?
-
-		ATTR bool operator<=(size_t b) const { if (m_minus) return 1; return m_value <= b; }
-		ATTR bool operator<(size_t b) const { if (m_minus) return 1; return m_value < b; }
-		ATTR bool operator>=(size_t b) const { if (m_minus) return 0; return m_value >= b; }
-		ATTR bool operator>(size_t b) const { if (m_minus) return 0; return m_value > b; }
-		ATTR bool operator==(size_t b) const { if (m_minus) return 0; return m_value == b; }
-		ATTR bool operator!=(size_t b) const { if (m_minus) return 1; return m_value != b; }
+		ATTR bool operator<=(size_t b) const  { if (m_minus) return 1; return m_value <= b; }
+		ATTR bool operator<(size_t b) const   { if (m_minus) return 1; return m_value < b; }
+		ATTR bool operator>=(size_t b) const  { if (m_minus) return 0; return m_value >= b; }
+		ATTR bool operator>(size_t b) const   { if (m_minus) return 0; return m_value > b; }
+		ATTR bool operator==(size_t b) const  { if (m_minus) return 0; return m_value == b; }
+		ATTR bool operator!=(size_t b) const  { if (m_minus) return 1; return m_value != b; }
 
 		ATTR operator size_t() { 
-			if (m_minus) my_abort( std::string("Trying to convert negative value=")+std::to_string(m_value)+std::string(" back to size_t!"));
-			return m_value; 
+			// to catch any errors
+			my_abort( std::string("Trying to convert the special signed-size_t object back to use it by value; "
+				"That is not allowed, it shoul be used ONLY FOR COMPARSION with size_t."
+				" value=")+std::to_string(m_value)+std::string(" back to size_t!"));				
+			//if (m_minus) my_abort( std::string("Trying to convert negative value=")+std::to_string(m_value)+std::string(" back to size_t!"));
+			return 0; // m_value; 
 		}
 
-		#undef ATTR
+		friend ATTR bool operator<=(size_t b, xsize_t_struct a);
+		friend ATTR bool operator<(size_t b, xsize_t_struct a);
+		friend ATTR bool operator>=(size_t b, xsize_t_struct a);
+		friend ATTR bool operator>(size_t b, xsize_t_struct a);
+		friend ATTR bool operator==(size_t b, xsize_t_struct a);
+		friend ATTR bool operator!=(size_t b, xsize_t_struct a);
 
 		// TEST CASE it -2,-1,0,+1,+2  N * N tests
 };
+#undef ATTR
+
+#define ATTR // TODO attribute operator?
+ATTR bool operator<=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 0; return b <= a.m_value; }
+ATTR bool operator<(size_t b, xsize_t_struct a)   { if (a.m_minus) return 0; return b < a.m_value; }
+ATTR bool operator>=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 1; return b >= a.m_value; }
+ATTR bool operator>(size_t b, xsize_t_struct a)   { if (a.m_minus) return 1; return b > a.m_value; }
+ATTR bool operator==(size_t b, xsize_t_struct a)  { if (a.m_minus) return 0; return b == a.m_value; }
+ATTR bool operator!=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 1; return b != a.m_value; }
+#undef ATTR
 
 
 typedef xsize_t_struct xsize_t; // TODO sfinae
@@ -198,26 +215,44 @@ bool test_vector_size(long long int AI, size_t BV) {
 
 	#define COMPARE(OPERATOR, OPERATOR_NAME) \
 	do { \
-		bool c1 = ((xsize_t_struct) AI  OPERATOR  tab.size()); \
-		bool c2 = (long double) AI  OPERATOR  (long double) BV; \
+		bool c1 = ( ((xsize_t_struct)AI)  OPERATOR  (tab.size()) ); \
+		bool c2 = ( (long double)AI)      OPERATOR  ((long double)BV); \
 		bool OK = (c1==c2); \
-		if (OK) cout << "ok" << OPERATOR_NAME << " "; else { cout <<"FAILED AI="<<AI<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "BV="<<BV<<" c1="<<c1<<" c2="<<c2<<"! "; } \
+		if (OK) cout << "ok" << OPERATOR_NAME << " "; \
+		else { cout <<"\nFAILED AI="<<AI<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "BV="<<BV<<" c1="<<c1<<" c2(double)="<<c2<<"! "; } \
 		all_ok = all_ok && OK; \
 	} while(0)
-
 	COMPARE( < , "<" );
 	COMPARE( <= , "<=" );
 	COMPARE( > , ">" );
 	COMPARE( > , ">=" );
 	COMPARE( == , "==" );
 	COMPARE( != , "!=" );
+	#undef COMPARE
+
+	#define COMPARE(OPERATOR, OPERATOR_NAME) \
+	do { \
+		bool c1 = ( (tab.size())       OPERATOR  ((xsize_t_struct)AI) ); \
+		bool c2 = ( ((long double)BV)  OPERATOR  ((long double)AI) ); \
+		bool OK = (c1==c2); \
+		if (OK) cout << "ok" << OPERATOR_NAME << " "; \
+		else { cout <<"\nFAILED BV="<<BV<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "AI="<<AI<<" c1="<<c1<<" c2(double)="<<c2<<"! "; } \
+		all_ok = all_ok && OK; \
+	} while(0)
+	COMPARE( < , "<" );
+	COMPARE( <= , "<=" );
+	COMPARE( > , ">" );
+	COMPARE( > , ">=" );
+	COMPARE( == , "==" );
+	COMPARE( != , "!=" );
+	#undef COMPARE
+
 	cout << "." << endl;
 
 	if (!all_ok) abort();
 	return all_ok;
 }
 
-// TODO test case!
 void main3() {
 	int long long x = -3;
 	vector<int> tab={0,1,2};
