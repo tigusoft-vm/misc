@@ -7,6 +7,24 @@
 #include <cmath>
 #include <iomanip>
 
+#define ALLOWED_BOOST 1
+
+#ifdef ALLOWED_BOOST 
+#include <boost/multiprecision/cpp_int.hpp> 
+#endif
+
+
+#ifdef ALLOWED_BOOST 
+
+typedef boost::multiprecision::checked_int1024_t t_safenumber;
+
+// typedef boost::multiprecision::number<cpp_int_backend<16384, 16384, signed_magnitude, checked, void> >    t_safenumber;
+
+#else
+
+typedef long long double t_safenumber;
+
+#endif
 
 /***
 
@@ -113,27 +131,17 @@ ATTR bool operator!=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 1; ret
 
 typedef xsize_t_struct xsize_t; // TODO sfinae
 
-#ifdef ALLOWED_BOOST
-	#include <boost/integer.hpp>
+//#ifdef ALLOWED_BOOST
+//	#include <boost/integer.hpp>
 
-	template <typename T> 
-	void f(typename T::foo) {} // Definition #1
-
-	template <typename T> 
-	void f(T) {}                // Definition #2
-	 
 	// typedef boost::int_t< 128 >::fast xsize_t;  // TODO use SFINAE
 
-//			f<Test>(10); // Call #1.
-//			f<int>(10);  // Call #2. Without error (even though there is no int::foo) thanks to SFINAE.
-
-
-#else
+//#else
 
 	typedef signed long long int msize_t;
 
-	// TODO static assert that this type can handle minus MAX_SIZE too
-#endif
+//	// TODO static assert that this type can handle minus MAX_SIZE too
+//#endif
 
 using namespace std;
 
@@ -253,6 +261,7 @@ bool test_vector_size(long long int AI, size_t BV) {
 	return all_ok;
 }
 
+
 void main3() {
 	int long long x = -3;
 	vector<int> tab={0,1,2};
@@ -262,14 +271,15 @@ void main3() {
 	if ( (xsize_t_struct) x > tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x >= tab.size()) { FOO(); } 
 
-	typedef signed long long int integral;
+	typedef t_safenumber integral;
 
-	integral p31 = std::pow(2,31);
-	integral p32 = std::pow(2,32);
-	size_t min1 = std::numeric_limits<size_t>::min();
-	size_t max1 = std::numeric_limits<size_t>::max();
-	size_t min2 = std::numeric_limits<integral>::min();
-	size_t max2 = std::numeric_limits<integral>::max();
+	integral p31 = static_cast<long long int>(std::pow(2,31));
+	integral p32 = static_cast<long long int>(std::pow(2,32));
+	typedef long long int big;
+	integral min1 = std::numeric_limits<big>::min();
+	integral max1 = std::numeric_limits<big>::max();
+	integral min2 = std::numeric_limits<big>::min();
+	integral max2 = std::numeric_limits<big>::max();
 
 	vector<integral> i_values = { 
 		min2,min2+1,min2+2,min1,min1+1, 
@@ -281,28 +291,26 @@ void main3() {
 		max1-1, max1, max2-1, max2, /* max2+... would go out */
 		};
 
-	vector<size_t> v_values = { 
+	vector<integral> v_values = { 
 		0,+1,+2,+3, +100,
 		+p31-1,+p31,+p31+1, +p32-1,+p32,+p32+1, 
 		max1/2-1, max1/2, max2/2-1, max2/2, max2/2+1, max2/2+2, 
 		max1-1, max1, max2-1, max2, max2+1, max2+2 
-		};
+	};
 
 
-	for (auto i : i_values) std::cout<<i<<" "; std::cout << std::endl;
-	for (auto v : v_values) std::cout<<v<<" "; std::cout << std::endl;
+	cout<<"Array i_values for the integral numbers:      ";  for (auto i : i_values) std::cout<<i<<" ";  std::cout << std::endl;
+	cout<<"Array v_values for the vector size_t numbers: ";  for (auto v : v_values) std::cout<<v<<" ";  std::cout << std::endl;
 	
 	bool all_ok = 1;
 	for (auto i : i_values) { 
 		for (auto v : v_values) {
-			const bool v_huge = v > std::pow(2,16);
+			const bool v_huge = v > static_cast<long long int>(std::pow(2,16));
 			if (!v_huge) {
-				// cout << "v_huge="<<v_huge<<" real vector for v="<<v << endl;
-				const bool ok = test_vector_size< vector<char> >(i,v);
+				const bool ok = test_vector_size< vector<char> >( i.convert_to<long long int>() , v.convert_to<size_t>() );
 				all_ok = all_ok && ok;
 			} else {
-				// cout << "v_huge="<<v_huge<<" FAKE vector for v="<<v << endl;
-				const bool ok = test_vector_size< fake_vector<char> >(i,v);
+				const bool ok = test_vector_size< fake_vector<char> >( i.convert_to<long long int>() , v.convert_to<size_t>() );
 				all_ok = all_ok && ok;
 			}
 		}	
