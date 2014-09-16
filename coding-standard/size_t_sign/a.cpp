@@ -52,15 +52,20 @@ struct xsize_t_struct {
 
 	public:
 		explicit xsize_t_struct(size_t size) : m_v(size) {} // only proper way to init this
-		//xsize_t_struct(long long int size) : m_v(size) {} // why is this needed?
 		template <class TYPE> xsize_t_struct(TYPE integral)=delete; // this is blocked
 		xsize_t_struct()=delete; // this is blocked too
 
 		// TEST CASE it -2,-1,0,+1,+2  N * N tests
 };
 
-template <class T_INT> bool operator< (T_INT value, xsize_t_struct size)   { std::cerr<<" {value="<<value<<"<"<<size.m_v<<" 1 } "; if (value<0) return 1; return value < size.m_v; }
-template <class T_INT> bool operator< (xsize_t_struct size, T_INT value)   { std::cerr<<" {xsize="<<size.m_v<<" < value="<<value<<" 2 } "; if (value<0) return 0; return size.m_v < value; }
+//template <class T_INT> bool operator< (T_INT value, xsize_t_struct size)   { std::cerr<<" {value="<<value<<"<"<<size.m_v<<" 1 } "; if (value<0) return 1; return value < size.m_v; }
+//template <class T_INT> bool operator< (xsize_t_struct size, T_INT value)   { std::cerr<<" {xsize="<<size.m_v<<" < value="<<value<<" 2 } "; if (value<0) return 0; return size.m_v < value; }
+
+template <class T_INT> bool operator< (T_INT value, xsize_t_struct size)   { if (value<0) return 1; return value < size.m_v; }
+template <class T_INT> bool operator< (xsize_t_struct size, T_INT value)   { if (value<0) return 0; return size.m_v < value; }
+template <class T_INT> bool operator<= (T_INT value, xsize_t_struct size)  { if (value<0) return 1; return value <= size.m_v; } // -100 <= 0
+template <class T_INT> bool operator<= (xsize_t_struct size, T_INT value)  { if (value<0) return 0; return size.m_v < value; } // 0 <= -100
+// @TODO all op
 
 #undef ATTR
 
@@ -158,6 +163,7 @@ bool test_vector_size(T_INT AI, size_t BV, bool loud) {
 
 	bool all_ok=1;
 
+// @TODO test:
 	#define COMPARE(OPERATOR, OPERATOR_NAME) \
 	do { \
 		bool c1 = ( (AI)  OPERATOR  ((xsize_t_struct)tab.size()) ); \
@@ -169,7 +175,7 @@ bool test_vector_size(T_INT AI, size_t BV, bool loud) {
 	} while(0)
 
 	COMPARE( < , "<" );
-//	COMPARE( <= , "<=" );
+	COMPARE( <= , "<=" );
 //	COMPARE( > , ">" );
 //	COMPARE( > , ">=" );
 //	COMPARE( == , "==" );
@@ -183,11 +189,11 @@ bool test_vector_size(T_INT AI, size_t BV, bool loud) {
 		bool c2 = ( ((long double)BV)  OPERATOR  ((long double)AI) ); \
 		bool OK = (c1==c2); \
 		if (OK) { if (loud) { cout << "ok" << OPERATOR_NAME << " "; } } \
-		else { cout <<"\nFAILED BV="<<BV<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "AI="<<AI<<" c1="<<c1<<" c2(double)="<<c2<<"! "; } \
+		else { cout <<"\nFAILED BV="<<BV<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "AI="<<AI<<". INFO: check1="<<c1<<" check2(is good, on double)="<<c2<<"! "; } \
 		all_ok = all_ok && OK; \
 	} while(0)
 	COMPARE( < , "<" );
-//	COMPARE( <= , "<=" );
+	COMPARE( <= , "<=" );
 //	COMPARE( > , ">" );
 //	COMPARE( > , ">=" );
 //	COMPARE( == , "==" );
