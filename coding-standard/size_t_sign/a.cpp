@@ -28,105 +28,42 @@ typedef long long double t_safenumber;
 
 /***
 
-signed long a; size_t b;
-
-if ( a < b ) ... // error
-
-if ( (xsize_t)a < b ) // ok
-if ( (xsize_t)a <= b ) // ok
-if ( (xsize_t)a > b ) // ok
-if ( (xsize_t)a >= b ) // ok
-
-if ( b < a(xsize_t) ) // ok
-if ( b <= a(xsize_t) ) // ok
-if ( b > a(xsize_t) ) // ok
-if ( b >= a(xsize_t) ) // ok
+size_t size;
+int b;
+if ( (opsize_t)size < b ) // ok
 
 */
 
 
-/** 
+/***
+@struct
+@brief you cast an size_t to this type, and then resulting type is comparable to all build-in integral types without warning nor overflows.
+
 This is a speciall struct that is suppose to:
-- allow comparing integrals that can be negative with a size_t
-- also possibly do a (partial) check is the value used makes sense to be used in size_t context
+- allow comparing integrals that can be negative
 
-The full version of size_t but with sign.
 Use this ONLY for casting for ONLY comparsions.
-This type is allowed to give you garbaged value in other cases, e.g. if you would like to store large negative
-number here, then it only guarantees to be able to confirm that will be smaller then your size_t (e.g. we could store here value like -1)
 */
 
-#define ATTR // TODO attribute operator?
+#define ATTR __attribute__((pure)) // TODO attribute operator?
 struct xsize_t_struct { 
-	private:
-		size_t m_value; // the value (without size) minus zero is not allowed.
-		bool m_minus; // 0=plus.  if value==0 then m_minus=0 always!
-		
+	public: /* public to not mock around with friending templated operators */
+		size_t m_v; // the value of size_t
+
 	public:
-		xsize_t_struct() { }
-		xsize_t_struct(size_t t) { m_minus=0; m_value=t; }
-
-		void my_abort(const std::string & msg) {
-			std::cout << "size_t arithmetics error in " << __FUNCTION__ << " " << __FILE__<<" : " << msg << std::endl;
-			abort();
-		}
-
-		// TODO also for signed long int
-		xsize_t_struct(signed long long int v) { 
-			if (v<0) { 
-				// we are not guaranteeing to store other values then needed for comparsing, so no need to check if -v is stored correctly
-				m_minus = 1; 
-				m_value = 1; // -v  we just store it as representing "-1". we avoid "-v" in case if that could wrap around,
-				// and result in minus=1,value=0 which would represent "-0" and that is not allowed (because other code 
-				// is not prepared to handle that correctly when comparing "-0" <= 0.
-			}
-			else {
-				m_minus = 0; 
-				const size_t limit_max = std::numeric_limits<size_t>::max(); 
-				unsigned long long int vu = v;
-				if (vu > limit_max) {
-					my_abort(std::string("Overflow: value of v=") + std::to_string(v) + std::string(" is too big to be placed in signed-size_t, "
-						"you are probably doing something wrong if you were about to compare it to size_t then"));
-				}
-				m_value = v;
-			}
-		}
-
-		ATTR bool operator<=(size_t b) const  { if (m_minus) return 1; return m_value <= b; }
-		ATTR bool operator<(size_t b) const   { if (m_minus) return 1; return m_value < b; }
-		ATTR bool operator>=(size_t b) const  { if (m_minus) return 0; return m_value >= b; }
-		ATTR bool operator>(size_t b) const   { if (m_minus) return 0; return m_value > b; }
-		ATTR bool operator==(size_t b) const  { if (m_minus) return 0; return m_value == b; }
-		ATTR bool operator!=(size_t b) const  { if (m_minus) return 1; return m_value != b; }
-
-		ATTR operator size_t() { 
-			// to catch any errors
-			my_abort( std::string("Trying to convert the special signed-size_t object back to use it by value; "
-				"That is not allowed, it shoul be used ONLY FOR COMPARSION with size_t."
-				" value=")+std::to_string(m_value)+std::string(" back to size_t!"));				
-			//if (m_minus) my_abort( std::string("Trying to convert negative value=")+std::to_string(m_value)+std::string(" back to size_t!"));
-			return 0; // m_value; 
-		}
-
-		friend ATTR bool operator<=(size_t b, xsize_t_struct a);
-		friend ATTR bool operator<(size_t b, xsize_t_struct a);
-		friend ATTR bool operator>=(size_t b, xsize_t_struct a);
-		friend ATTR bool operator>(size_t b, xsize_t_struct a);
-		friend ATTR bool operator==(size_t b, xsize_t_struct a);
-		friend ATTR bool operator!=(size_t b, xsize_t_struct a);
+		explicit xsize_t_struct(size_t size) : m_v(size) {} // only proper way to init this
+		//xsize_t_struct(long long int size) : m_v(size) {} // why is this needed?
+		template <class TYPE> xsize_t_struct(TYPE integral)=delete; // this is blocked
+		xsize_t_struct()=delete; // this is blocked too
 
 		// TEST CASE it -2,-1,0,+1,+2  N * N tests
 };
+
+template <class T_INT> bool operator< (T_INT value, xsize_t_struct size)   { std::cerr<<" {value="<<value<<"<"<<size.m_v<<" 1 } "; if (value<0) return 1; return value < size.m_v; }
+template <class T_INT> bool operator< (xsize_t_struct size, T_INT value)   { std::cerr<<" {xsize="<<size.m_v<<" < value="<<value<<" 2 } "; if (value<0) return 0; return size.m_v < value; }
+
 #undef ATTR
 
-#define ATTR // TODO attribute operator?
-ATTR bool operator<=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 0; return b <= a.m_value; }
-ATTR bool operator<(size_t b, xsize_t_struct a)   { if (a.m_minus) return 0; return b < a.m_value; }
-ATTR bool operator>=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 1; return b >= a.m_value; }
-ATTR bool operator>(size_t b, xsize_t_struct a)   { if (a.m_minus) return 1; return b > a.m_value; }
-ATTR bool operator==(size_t b, xsize_t_struct a)  { if (a.m_minus) return 0; return b == a.m_value; }
-ATTR bool operator!=(size_t b, xsize_t_struct a)  { if (a.m_minus) return 1; return b != a.m_value; }
-#undef ATTR
 
 
 typedef xsize_t_struct xsize_t; // TODO sfinae
@@ -212,10 +149,10 @@ class fake_vector {
 		size_t size() const { return m_size; }
 };
 
-template <class T_VECTOR>
-bool test_vector_size(long long int AI, size_t BV) {
+template <class T_VECTOR, class T_INT>
+bool test_vector_size(T_INT AI, size_t BV, bool loud) {
 	using namespace std; 
-	std::cout << setw(20) << AI << " vs vector size BV="<< setw(20) << BV <<"... " << std::flush;
+	if (loud) { std::cout << setw(20) << AI << " vs vector size BV="<< setw(20) << BV <<"... " << std::flush; }
 	T_VECTOR tab;
 	tab.resize(BV);
 
@@ -223,36 +160,38 @@ bool test_vector_size(long long int AI, size_t BV) {
 
 	#define COMPARE(OPERATOR, OPERATOR_NAME) \
 	do { \
-		bool c1 = ( ((xsize_t_struct)AI)  OPERATOR  (tab.size()) ); \
+		bool c1 = ( (AI)  OPERATOR  ((xsize_t_struct)tab.size()) ); \
 		bool c2 = ( (long double)AI)      OPERATOR  ((long double)BV); \
 		bool OK = (c1==c2); \
-		if (OK) cout << "ok" << OPERATOR_NAME << " "; \
+		if (OK) { if (loud) { cout << "ok" << OPERATOR_NAME << " "; } } \
 		else { cout <<"\nFAILED AI="<<AI<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "BV="<<BV<<" c1="<<c1<<" c2(double)="<<c2<<"! "; } \
 		all_ok = all_ok && OK; \
 	} while(0)
+
 	COMPARE( < , "<" );
-	COMPARE( <= , "<=" );
-	COMPARE( > , ">" );
-	COMPARE( > , ">=" );
-	COMPARE( == , "==" );
-	COMPARE( != , "!=" );
+//	COMPARE( <= , "<=" );
+//	COMPARE( > , ">" );
+//	COMPARE( > , ">=" );
+//	COMPARE( == , "==" );
+//	COMPARE( != , "!=" );
 	#undef COMPARE
+
 
 	#define COMPARE(OPERATOR, OPERATOR_NAME) \
 	do { \
-		bool c1 = ( (tab.size())       OPERATOR  ((xsize_t_struct)AI) ); \
+		bool c1 = ( (xsize_t_struct)(tab.size())       OPERATOR  (AI) ); \
 		bool c2 = ( ((long double)BV)  OPERATOR  ((long double)AI) ); \
 		bool OK = (c1==c2); \
-		if (OK) cout << "ok" << OPERATOR_NAME << " "; \
+		if (OK) { if (loud) { cout << "ok" << OPERATOR_NAME << " "; } } \
 		else { cout <<"\nFAILED BV="<<BV<<"  " << "(" << OPERATOR_NAME << ")" << "  " << "AI="<<AI<<" c1="<<c1<<" c2(double)="<<c2<<"! "; } \
 		all_ok = all_ok && OK; \
 	} while(0)
 	COMPARE( < , "<" );
-	COMPARE( <= , "<=" );
-	COMPARE( > , ">" );
-	COMPARE( > , ">=" );
-	COMPARE( == , "==" );
-	COMPARE( != , "!=" );
+//	COMPARE( <= , "<=" );
+//	COMPARE( > , ">" );
+//	COMPARE( > , ">=" );
+//	COMPARE( == , "==" );
+//	COMPARE( != , "!=" );
 	#undef COMPARE
 
 	cout << "." << endl;
@@ -262,15 +201,38 @@ bool test_vector_size(long long int AI, size_t BV) {
 }
 
 
+template <class T_INT,  class T_I, class T_V>
+bool RunTests(const T_I &i_values,  const T_V &v_values, bool loud) {
+	cout<<"Array i_values for the integral numbers:      ";  for (auto i : i_values) std::cout<<i<<" ";  std::cout << std::endl;
+	cout<<"Array v_values for the vector size_t numbers: ";  for (auto v : v_values) std::cout<<v<<" ";  std::cout << std::endl;
+	cout<<"Testing on type: " << typeid(T_INT).name() << endl;
+	bool all_ok = 1;
+	for (auto i : i_values) { 
+		for (auto v : v_values) {
+			const bool v_huge = v > static_cast<long long int>(std::pow(2,16));
+			if (!v_huge) {
+				const bool ok = test_vector_size< vector<char> >( i.template convert_to<long long int>() , v.template convert_to<size_t>() , loud );
+				all_ok = all_ok && ok;
+			} else {
+				const bool ok = test_vector_size< fake_vector<char> >( i.template convert_to<long long int>() , v.template convert_to<size_t>() , loud );
+				all_ok = all_ok && ok;
+			}
+		}	
+	}
+
+	return all_ok;
+
+}
+
 void main3() {
-	int long long x = -3;
-	vector<int> tab={0,1,2};
+	//int long long x = -3;
+	//vector<int> tab={0,1,2};
 	// if ( x < tab.size()) { FOO(); } //  warning: comparison between signed and unsigned integer expressions [-Wsign-compare]
-	if ( (xsize_t_struct) x < tab.size()) { FOO(); } 
+/*	if ( (xsize_t_struct) x < tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x <= tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x > tab.size()) { FOO(); } 
 	if ( (xsize_t_struct) x >= tab.size()) { FOO(); } 
-
+*/
 	typedef t_safenumber integral;
 
 	integral p31 = static_cast<long long int>(std::pow(2,31));
@@ -299,21 +261,11 @@ void main3() {
 	};
 
 
-	cout<<"Array i_values for the integral numbers:      ";  for (auto i : i_values) std::cout<<i<<" ";  std::cout << std::endl;
-	cout<<"Array v_values for the vector size_t numbers: ";  for (auto v : v_values) std::cout<<v<<" ";  std::cout << std::endl;
-	
-	bool all_ok = 1;
-	for (auto i : i_values) { 
-		for (auto v : v_values) {
-			const bool v_huge = v > static_cast<long long int>(std::pow(2,16));
-			if (!v_huge) {
-				const bool ok = test_vector_size< vector<char> >( i.convert_to<long long int>() , v.convert_to<size_t>() );
-				all_ok = all_ok && ok;
-			} else {
-				const bool ok = test_vector_size< fake_vector<char> >( i.convert_to<long long int>() , v.convert_to<size_t>() );
-				all_ok = all_ok && ok;
-			}
-		}	
+	bool all_ok=1;
+
+	{
+		const bool ok = RunTests<signed long long int>(i_values, v_values, true);
+		all_ok = all_ok && ok;
 	}
 
 	if (!all_ok) {
